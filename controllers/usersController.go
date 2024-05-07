@@ -5,8 +5,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/lapkomo2018/DiskordServer/initializers"
 	"github.com/lapkomo2018/DiskordServer/models"
+	"github.com/lapkomo2018/DiskordServer/validators"
 	"golang.org/x/crypto/bcrypt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -19,6 +21,13 @@ func Signup(c *fiber.Ctx) error {
 	if c.BodyParser(&body) != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Failed to read body",
+		})
+	}
+
+	//validate email
+	if validators.ValidateEmail(body.Email) != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid email",
 		})
 	}
 
@@ -37,8 +46,14 @@ func Signup(c *fiber.Ctx) error {
 	}
 	result := initializers.DB.Create(&user)
 	if result.Error != nil {
+		errString := result.Error.Error()
+		if strings.Contains(errString, "SQLSTATE 23505") {
+			errString = "Email already registered"
+		} else if strings.Contains(errString, "SQLSTATE") {
+			errString = "Failed to create user due to a database error"
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create user",
+			"error": errString,
 		})
 	}
 
@@ -60,8 +75,7 @@ func Login(c *fiber.Ctx) error {
 
 	//look up user
 	var user models.User
-	initializers.DB.First(&user, "email = ?", body.Email)
-	if user.ID == 0 {
+	if result := initializers.DB.First(&user, "email = ?", body.Email); result.Error != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "User not found",
 		})
@@ -95,7 +109,9 @@ func Login(c *fiber.Ctx) error {
 		SameSite: "Lax",
 	})
 	//respond
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{})
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"authorization": tokenString,
+	})
 }
 
 func Validate(c *fiber.Ctx) error {
