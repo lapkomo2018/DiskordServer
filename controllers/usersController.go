@@ -44,9 +44,9 @@ func Signup(c *fiber.Ctx) error {
 		Email:    body.Email,
 		Password: string(hash),
 	}
-	result := initializers.DB.Create(&user)
-	if result.Error != nil {
-		errString := result.Error.Error()
+
+	if err := initializers.DB.Create(&user).Error; err != nil {
+		errString := err.Error()
 		if strings.Contains(errString, "SQLSTATE 23505") {
 			errString = "Email already registered"
 		} else if strings.Contains(errString, "SQLSTATE") {
@@ -75,7 +75,7 @@ func Login(c *fiber.Ctx) error {
 
 	//look up user
 	var user models.User
-	if result := initializers.DB.First(&user, "email = ?", body.Email); result.Error != nil {
+	if err := initializers.DB.Where(&models.User{Email: body.Email}).First(&user).Error; err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "User not found",
 		})
@@ -101,6 +101,7 @@ func Login(c *fiber.Ctx) error {
 		})
 	}
 
+	//setting authorization cookie
 	c.Cookie(&fiber.Cookie{
 		Name:     "Authorization",
 		Value:    tokenString,

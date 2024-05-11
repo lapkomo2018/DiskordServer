@@ -9,7 +9,7 @@ type User struct {
 	gorm.Model
 	Email    string `gorm:"unique;not null"`
 	Password string `gorm:"not null"`
-	Files    []File `gorm:"foreignKey:UserID"`
+	Files    []File `gorm:"foreignKey:UserId"`
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
@@ -23,21 +23,21 @@ func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
 
 type File struct {
 	gorm.Model
-	UserID    uint    `gorm:"not null"`
+	UserId    uint    `gorm:"not null"`
 	Name      string  `gorm:"not null"`
 	Hash      string  `gorm:"not null"`
 	Size      uint64  `gorm:"not null"`
 	IsPublic  bool    `gorm:"not null"`
 	NumChunks uint    `gorm:"not null"`
 	ChunkSize uint64  `gorm:"not null"`
-	Chunks    []Chunk `gorm:"foreignKey:FileID"`
+	Chunks    []Chunk `gorm:"foreignKey:FileId"`
 	User      User    `gorm:"references:ID"`
 }
 
 func (f *File) BeforeCreate(tx *gorm.DB) (err error) {
 	if f.Size == 0 {
 		err = errors.New("file size cannot be zero")
-	} else if f.UserID == 0 {
+	} else if f.UserId == 0 {
 		err = errors.New("user id cannot be zero")
 	} else if f.Name == "" {
 		err = errors.New("file name cannot be empty")
@@ -49,18 +49,18 @@ func (f *File) BeforeCreate(tx *gorm.DB) (err error) {
 
 type Chunk struct {
 	gorm.Model
-	FileID    uint   `gorm:"not null"`
+	FileId    uint   `gorm:"not null"`
 	Index     uint   `gorm:"not null"`
 	Hash      string `gorm:"not null"`
 	Size      uint64 `gorm:"not null"`
-	MessageID string `gorm:"unique;not null"`
+	MessageId string `gorm:"unique;not null"`
 	File      File   `gorm:"references:ID"`
 }
 
 func (p *Chunk) BeforeCreate(tx *gorm.DB) (err error) {
-	if p.FileID == 0 {
+	if p.FileId == 0 {
 		err = errors.New("file id cannot be zero")
-	} else if p.MessageID == "" {
+	} else if p.MessageId == "" {
 		err = errors.New("message id cannot be empty")
 	} else if p.Hash == "" {
 		err = errors.New("file hash cannot be empty")

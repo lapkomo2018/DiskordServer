@@ -3,7 +3,6 @@ package controllers
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/lapkomo2018/DiskordServer/functions"
-	"log"
 	"mime/multipart"
 )
 
@@ -29,7 +28,6 @@ func CalculateHashFromFile(c *fiber.Ctx) error {
 			"error": "Failed to calculate hash for file",
 		})
 	}
-	log.Printf("Returning hash from file: %s", hash)
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"hash": hash,
 	})
@@ -52,7 +50,6 @@ func CalculateHashFromHashes(c *fiber.Ctx) error {
 			"error": "Failed to calculate hash from hashes",
 		})
 	}
-	log.Printf("Returning hash from hashes: %s", hash)
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"hash": hash,
 	})

@@ -9,15 +9,15 @@ import (
 	"github.com/lapkomo2018/DiskordServer/models"
 	"io"
 	"mime/multipart"
-	"strconv"
 )
 
 func UploadChunk(c *fiber.Ctx) error {
+	var err error
 	// get file from local context
 	file, ok := c.Locals("file").(models.File)
 	if !ok {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse bd file",
+			"error": "Failed to parse file",
 		})
 	}
 
@@ -27,23 +27,9 @@ func UploadChunk(c *fiber.Ctx) error {
 		Size  uint64
 		Index uint64
 	}
-	var err error
-	body.Hash = c.FormValue("hash")
-	if body.Hash == "" {
+	if err := c.BodyParser(&body); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Hash is required",
-		})
-	}
-	body.Size, err = strconv.ParseUint(c.FormValue("size"), 10, 64)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse size",
-		})
-	}
-	body.Index, err = strconv.ParseUint(c.FormValue("index"), 10, 32)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse index",
+			"error": "Failed to parse body",
 		})
 	}
 
@@ -117,18 +103,17 @@ func UploadChunk(c *fiber.Ctx) error {
 		})
 	}
 
-	// create file chunk
+	// create chunk
 	chunk := models.Chunk{
-		FileID:    file.ID,
+		FileId:    file.ID,
 		Hash:      body.Hash,
 		Size:      body.Size,
 		Index:     uint(body.Index),
-		MessageID: message.ID,
+		MessageId: message.ID,
 	}
 
 	// upload to bd
-	result := initializers.DB.Create(&chunk)
-	if result.Error != nil {
+	if err := initializers.DB.Create(&chunk).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to upload chunk in bd",
 		})
@@ -139,47 +124,18 @@ func UploadChunk(c *fiber.Ctx) error {
 }
 
 func DownloadChunk(c *fiber.Ctx) error {
-	// get file from local storage
-	file, ok := c.Locals("file").(models.File)
+	var err error
+	// get chunk from local
+	chunk, ok := c.Locals("chunk").(models.Chunk)
 	if !ok {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse bd file",
+			"error": "Failed to parse chunk",
 		})
 	}
 
-	// preload chunks
-	if result := initializers.DB.Preload("Chunks").First(&file); result.Error != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to find file or preload chunks",
-		})
-	}
-
-	// parse body
-	var body struct {
-		ChunkID uint
-	}
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse body",
-		})
-	}
-
-	// get chunk
-	var chunk *models.Chunk
-	for _, c := range file.Chunks {
-		if c.ID == body.ChunkID {
-			chunk = &c
-			break
-		}
-	}
-	if chunk == nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Chunk not found",
-		})
-	}
+	// open reader
 	var fileReader io.Reader
-	var err error
-	fileReader, err = initializers.DownloadFilesFromMessage(initializers.ChannelID, chunk.MessageID)
+	fileReader, err = initializers.DownloadFilesFromMessage(initializers.ChannelID, chunk.MessageId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to download chunk file",
@@ -188,4 +144,18 @@ func DownloadChunk(c *fiber.Ctx) error {
 
 	// preload
 	return c.Status(fiber.StatusOK).SendStream(fileReader)
+}
+
+func GetChunkInfo(c *fiber.Ctx) error {
+	// get chunk from local
+	chunk, ok := c.Locals("chunk").(models.Chunk)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to parse chunk",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"chunk": chunk,
+	})
 }

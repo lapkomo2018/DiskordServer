@@ -6,7 +6,7 @@ import (
 	"github.com/lapkomo2018/DiskordServer/models"
 )
 
-func GetUserFilesList(c *fiber.Ctx) error {
+func GetUserFiles(c *fiber.Ctx) error {
 	user, ok := c.Locals("user").(models.User)
 	if !ok {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -14,14 +14,19 @@ func GetUserFilesList(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := initializers.DB.Preload("Files").Preload("Files.Chunks").Find(&user).Error; err != nil {
+	if err := initializers.DB.Preload("Files").Find(&user).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to load user files",
 		})
 	}
 
+	var fileIds []uint
+	for _, file := range user.Files {
+		fileIds = append(fileIds, file.ID)
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"files": user.Files,
+		"fileIds": fileIds,
 	})
 }
 
@@ -51,7 +56,7 @@ func UploadFile(c *fiber.Ctx) error {
 
 	//add file to bd
 	file := models.File{
-		UserID:    user.ID,
+		UserId:    user.ID,
 		Name:      body.Name,
 		Hash:      body.Hash,
 		Size:      body.Size,
@@ -59,16 +64,16 @@ func UploadFile(c *fiber.Ctx) error {
 		NumChunks: body.NumChunks,
 		ChunkSize: body.ChunkSize,
 	}
-	result := initializers.DB.Create(&file)
-	if result.Error != nil {
+
+	if err := initializers.DB.Create(&file).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": result.Error.Error(),
+			"error": err.Error(),
 		})
 	}
 
 	//response
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"fileID": file.ID,
+		"fileId": file.ID,
 	})
 
 }
@@ -110,5 +115,26 @@ func DownloadFile(c *fiber.Ctx) error {
 		"size":   file.Size,
 		"hash":   file.Hash,
 		"chunks": file.Chunks,
+	})
+}
+
+func GetFileInfo(c *fiber.Ctx) error {
+	//get file from local context
+	file, ok := c.Locals("file").(models.File)
+	if !ok {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to parse file",
+		})
+	}
+
+	//preload pieces
+	if err := initializers.DB.Preload("Chunks").Find(&file).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to load user files",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"file": file,
 	})
 }

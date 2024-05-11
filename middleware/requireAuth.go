@@ -46,7 +46,7 @@ func RequireAuth(c *fiber.Ctx) error {
 		}
 		//find user with token
 		var user models.User
-		if result := initializers.DB.First(&user, claims["sub"]); result.Error != nil {
+		if err := initializers.DB.First(&user, claims["sub"]).Error; err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "User not found",
 			})
