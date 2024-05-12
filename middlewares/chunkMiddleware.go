@@ -1,4 +1,4 @@
-package middleware
+package middlewares
 
 import (
 	"github.com/gofiber/fiber/v2"
@@ -28,7 +28,7 @@ func RequireChunk(c *fiber.Ctx) error {
 
 	// get chunk from bd
 	var chunk models.Chunk
-	if err := initializers.DB.Where(&models.Chunk{Index: uint(chunkIndex), File: file}).First(&chunk).Error; err != nil {
+	if err := initializers.DB.First(&chunk, &models.Chunk{FileId: file.ID, Index: uint(chunkIndex)}).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Chunk not found",
 		})

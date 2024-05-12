@@ -7,7 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/skip"
 	"github.com/lapkomo2018/DiskordServer/controllers"
 	"github.com/lapkomo2018/DiskordServer/initializers"
-	"github.com/lapkomo2018/DiskordServer/middleware"
+	"github.com/lapkomo2018/DiskordServer/middlewares"
 	"log"
 	"os"
 )
@@ -21,7 +21,7 @@ func init() {
 
 func main() {
 	app := fiber.New(fiber.Config{BodyLimit: 1024 * 1024 * 25})
-	app.Use(middleware.CorsMiddleware([]string{"http://46.63.69.24:5173", "http://localhost:5173"}))
+	app.Use(middlewares.CorsMiddleware([]string{"http://46.63.69.24:5173", "http://localhost:5173"}))
 	app.Use(logger.New())
 
 	app.Get("/monitor", monitor.New())
@@ -35,20 +35,20 @@ func main() {
 	user := api.Group("/user")
 	user.Post("/signup", controllers.Signup)
 	user.Post("/login", controllers.Login)
-	user.Get("/validate", middleware.RequireAuth, controllers.Validate)
-	user.Get("/files", middleware.RequireAuth, controllers.GetUserFiles)
+	user.Get("/validate", middlewares.RequireAuth, controllers.Validate)
+	user.Get("/files", middlewares.RequireAuth, controllers.GetUserFiles)
 
-	file := api.Group("/file")
-	file.Post("/upload", middleware.RequireAuth, controllers.UploadFile)
+	files := api.Group("/files")
+	files.Post("/upload", middlewares.RequireAuth, controllers.UploadFile)
 
-	fileId := file.Group("/:fileId<min(1)>", middleware.RequireFile, skip.New(middleware.RequireAuth, middleware.FileIsPublic), skip.New(middleware.FileOwnerCheck, middleware.FileIsPublic))
+	fileId := files.Group("/:fileId<min(1)>", middlewares.RequireFile, skip.New(middlewares.RequireAuth, middlewares.FileIsPublic), skip.New(middlewares.FileOwnerCheck, middlewares.FileIsPublic))
 	fileId.Get("/info", controllers.GetFileInfo)
 	fileId.Get("/download", controllers.DownloadFile)
 
-	chunk := fileId.Group("/chunk")
-	chunk.Post("/upload", skip.New(middleware.RequireAuth, middleware.IsKeyInLocals("user")), middleware.FileOwnerCheck, controllers.UploadChunk)
+	chunks := fileId.Group("/chunks")
+	chunks.Post("/upload", skip.New(middlewares.RequireAuth, middlewares.IsKeyInLocals("user")), middlewares.FileOwnerCheck, controllers.UploadChunk)
 
-	chunkIndex := chunk.Group("/:chunkIndex<min(0)>", middleware.RequireChunk)
+	chunkIndex := chunks.Group("/:chunkIndex<min(0)>", middlewares.RequireChunk)
 	chunkIndex.Get("/info", controllers.GetChunkInfo)
 	chunkIndex.Get("/download", controllers.DownloadChunk)
 

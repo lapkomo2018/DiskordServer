@@ -75,7 +75,7 @@ func Login(c *fiber.Ctx) error {
 
 	//look up user
 	var user models.User
-	if err := initializers.DB.Where(&models.User{Email: body.Email}).First(&user).Error; err != nil {
+	if err := initializers.DB.First(&user, &models.User{Email: body.Email}).Error; err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "User not found",
 		})

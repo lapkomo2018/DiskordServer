@@ -110,11 +110,13 @@ func DownloadFile(c *fiber.Ctx) error {
 		})
 	}
 
+	var chunkIndexes []uint
+	for _, chunk := range file.Chunks {
+		chunkIndexes = append(chunkIndexes, chunk.Index)
+	}
+
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"name":   file.Name,
-		"size":   file.Size,
-		"hash":   file.Hash,
-		"chunks": file.Chunks,
+		"chunks": chunkIndexes,
 	})
 }
 
@@ -134,7 +136,18 @@ func GetFileInfo(c *fiber.Ctx) error {
 		})
 	}
 
+	responseFile := struct {
+		id   uint
+		name string
+		size uint64
+		hash string
+	}{
+		id:   file.ID,
+		name: file.Name,
+		size: file.Size,
+		hash: file.Hash,
+	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"file": file,
+		"file": responseFile,
 	})
 }

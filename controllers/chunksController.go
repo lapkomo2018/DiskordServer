@@ -155,7 +155,16 @@ func GetChunkInfo(c *fiber.Ctx) error {
 		})
 	}
 
+	responseChunk := struct {
+		ID   uint
+		Size uint64
+		Hash string
+	}{
+		ID:   chunk.ID,
+		Size: chunk.Size,
+		Hash: chunk.Hash,
+	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"chunk": chunk,
+		"chunk": responseChunk,
 	})
 }
