@@ -1,6 +1,7 @@
 package initializers
 
 import (
+	"bytes"
 	"errors"
 	"github.com/bwmarrin/discordgo"
 	"io"
@@ -10,8 +11,6 @@ import (
 
 var DiscordBot *discordgo.Session
 
-const ChannelID string = "1237128843039604918"
-
 func InitializeDiscordBot() {
 	var err error
 	DiscordBot, err = discordgo.New("Bot " + os.Getenv("DISCORD_TOKEN"))
@@ -20,8 +19,8 @@ func InitializeDiscordBot() {
 	}
 }
 
-func DownloadFilesFromMessage(channelID string, messageID string) (io.Reader, error) {
-	message, err := DiscordBot.ChannelMessage(channelID, messageID)
+func DownloadFileFromMessage(messageID string) (io.Reader, error) {
+	message, err := DiscordBot.ChannelMessage(os.Getenv("DISCORD_CHANEL"), messageID)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +32,23 @@ func DownloadFilesFromMessage(channelID string, messageID string) (io.Reader, er
 		}
 		defer response.Body.Close()
 
-		return response.Body, nil
+		var buffer bytes.Buffer
+
+		if _, err := io.Copy(&buffer, response.Body); err != nil {
+			return nil, err
+		}
+
+		bufferReader := bytes.NewReader(buffer.Bytes())
+
+		return bufferReader, nil
 	}
 
 	return nil, errors.New("No attachment found")
+}
+
+func DeleteMessage(messageID string) error {
+	if err := DiscordBot.ChannelMessageDelete(os.Getenv("DISCORD_CHANEL"), messageID); err != nil {
+		return err
+	}
+	return nil
 }

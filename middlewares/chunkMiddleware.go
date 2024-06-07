@@ -12,26 +12,20 @@ func RequireChunk(c *fiber.Ctx) error {
 	// get file from local storage
 	file, ok := c.Locals("file").(models.File)
 	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse bd file",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse BD file")
 	}
 
 	// get chunkIndex
 	var chunkIndex int
 	chunkIndex, err = strconv.Atoi(c.Params("chunkIndex"))
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid chunk index",
-		})
+		return fiber.NewError(fiber.StatusBadRequest, "Invalid chunk index")
 	}
 
 	// get chunk from bd
 	var chunk models.Chunk
 	if err := initializers.DB.First(&chunk, &models.Chunk{FileId: file.ID, Index: uint(chunkIndex)}).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Chunk not found",
-		})
+		return fiber.NewError(fiber.StatusNotFound, "Chunk not found")
 	}
 
 	c.Locals("chunk", chunk)

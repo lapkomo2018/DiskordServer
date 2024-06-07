@@ -18,9 +18,7 @@ func RequireAuth(c *fiber.Ctx) error {
 	if err != nil {
 		tokenString, err = extractTokenFromHeaders(c)
 		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Failed to get token",
-			})
+			return fiber.NewError(fiber.StatusUnauthorized, "Failed to get token")
 		}
 	}
 
@@ -32,31 +30,23 @@ func RequireAuth(c *fiber.Ctx) error {
 		return []byte(os.Getenv("SECRET")), nil
 	})
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Failed to decode token",
-		})
+		return fiber.NewError(fiber.StatusUnauthorized, "Failed to decode token")
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 		// check exp
 		if float64(time.Now().Unix()) > claims["exp"].(float64) {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Token is expired",
-			})
+			return fiber.NewError(fiber.StatusUnauthorized, "Token is expired")
 		}
 		//find user with token
 		var user models.User
 		if err := initializers.DB.First(&user, claims["sub"]).Error; err != nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "User not found",
-			})
+			return fiber.NewError(fiber.StatusUnauthorized, "User not found")
 		}
 		//attach to req
 		c.Locals("user", user)
 	} else {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Failed to parse token",
-		})
+		return fiber.NewError(fiber.StatusUnauthorized, "Failed to parse token")
 	}
 	//continue
 	return c.Next()

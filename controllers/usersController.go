@@ -19,24 +19,18 @@ func Signup(c *fiber.Ctx) error {
 		Password string
 	}
 	if c.BodyParser(&body) != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to read body",
-		})
+		return fiber.NewError(fiber.StatusBadRequest, "Failed to read body")
 	}
 
 	//validate email
 	if validators.ValidateEmail(body.Email) != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid email",
-		})
+		return fiber.NewError(fiber.StatusBadRequest, "Invalid email")
 	}
 
 	//hash pass
 	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to hash password",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to hash password")
 	}
 
 	//create user
@@ -52,9 +46,7 @@ func Signup(c *fiber.Ctx) error {
 		} else if strings.Contains(errString, "SQLSTATE") {
 			errString = "Failed to create user due to a database error"
 		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": errString,
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, errString)
 	}
 
 	//respond
@@ -68,25 +60,19 @@ func Login(c *fiber.Ctx) error {
 		Password string
 	}
 	if c.BodyParser(&body) != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to read body",
-		})
+		return fiber.NewError(fiber.StatusBadRequest, "Failed to read body")
 	}
 
 	//look up user
 	var user models.User
 	if err := initializers.DB.First(&user, &models.User{Email: body.Email}).Error; err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "User not found",
-		})
+		return fiber.NewError(fiber.StatusBadRequest, "User not found")
 	}
 
 	//compare passwords
 	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password))
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Incorrect password",
-		})
+		return fiber.NewError(fiber.StatusBadRequest, "Incorrect password")
 	}
 
 	//generate jwt token
@@ -96,9 +82,7 @@ func Login(c *fiber.Ctx) error {
 	})
 	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET")))
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create token",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to create token")
 	}
 
 	//setting authorization cookie
@@ -118,12 +102,39 @@ func Login(c *fiber.Ctx) error {
 func Validate(c *fiber.Ctx) error {
 	user, ok := c.Locals("user").(models.User)
 	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse user",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"userEmail": user.Email,
 	})
+}
+
+func GetUserFiles(c *fiber.Ctx) error {
+	user, ok := c.Locals("user").(models.User)
+	if !ok {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
+	}
+
+	if err := initializers.DB.Preload("Files").Find(&user).Error; err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user files")
+	}
+
+	type returnedFile struct {
+		Id       uint   `json:"id"`
+		Name     string `json:"name"`
+		Size     uint64 `json:"size"`
+		IsPublic bool   `json:"isPublic"`
+	}
+	var files []returnedFile
+	for _, file := range user.Files {
+		files = append(files, returnedFile{
+			Id:       file.ID,
+			Name:     file.Name,
+			Size:     file.Size,
+			IsPublic: file.IsPublic,
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(files)
 }

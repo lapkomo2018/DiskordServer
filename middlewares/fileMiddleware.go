@@ -13,17 +13,13 @@ func RequireFile(c *fiber.Ctx) error {
 	var fileId int
 	fileId, err = strconv.Atoi(c.Params("fileId"))
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid file ID",
-		})
+		return fiber.NewError(fiber.StatusBadRequest, "Invalid file ID")
 	}
 
 	// get file from bd
 	var file models.File
 	if err := initializers.DB.First(&file, fileId).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "File not found",
-		})
+		return fiber.NewError(fiber.StatusNotFound, "File not found")
 	}
 
 	// putting file into local
@@ -35,24 +31,18 @@ func FileOwnerCheck(c *fiber.Ctx) error {
 	// get user
 	user, ok := c.Locals("user").(models.User)
 	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse user",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
 	}
 
 	// get file
 	file, ok := c.Locals("file").(models.File)
 	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse file",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
 	}
 
 	// check file owner
 	if file.UserId != user.ID {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"error": "You are not the owner of the file",
-		})
+		return fiber.NewError(fiber.StatusForbidden, "You are not the owner of the file")
 	}
 	return c.Next()
 }

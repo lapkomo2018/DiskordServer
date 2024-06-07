@@ -6,37 +6,11 @@ import (
 	"github.com/lapkomo2018/DiskordServer/models"
 )
 
-func GetUserFiles(c *fiber.Ctx) error {
-	user, ok := c.Locals("user").(models.User)
-	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse user",
-		})
-	}
-
-	if err := initializers.DB.Preload("Files").Find(&user).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to load user files",
-		})
-	}
-
-	var fileIds []uint
-	for _, file := range user.Files {
-		fileIds = append(fileIds, file.ID)
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"fileIds": fileIds,
-	})
-}
-
 func UploadFile(c *fiber.Ctx) error {
 	//get user from local context
 	user, ok := c.Locals("user").(models.User)
 	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse user",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
 	}
 
 	//get file info from body
@@ -49,9 +23,7 @@ func UploadFile(c *fiber.Ctx) error {
 		ChunkSize uint64
 	}
 	if err := c.BodyParser(&body); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse body",
-		})
+		return fiber.NewError(fiber.StatusBadRequest, "Failed to parse body")
 	}
 
 	//add file to bd
@@ -66,9 +38,7 @@ func UploadFile(c *fiber.Ctx) error {
 	}
 
 	if err := initializers.DB.Create(&file).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to create file")
 	}
 
 	//response
@@ -82,72 +52,92 @@ func DownloadFile(c *fiber.Ctx) error {
 	//get file from local context
 	file, ok := c.Locals("file").(models.File)
 	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse file",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
 	}
 
 	//preload pieces
 	if err := initializers.DB.Preload("Chunks").Find(&file).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to load user files",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user files")
 	}
 
 	// validate file
 	if file.NumChunks != uint(len(file.Chunks)) {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "File is corrupted",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "File is corrupted")
 	}
 	var totalSize uint64
 	for _, chunk := range file.Chunks {
 		totalSize += chunk.Size
 	}
 	if totalSize != file.Size {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "File is corrupted",
+		return fiber.NewError(fiber.StatusInternalServerError, "File is corrupted")
+	}
+
+	type resChunk struct {
+		Index uint `json:"index"`
+	}
+	var chunks []resChunk
+	for _, chunk := range file.Chunks {
+		chunks = append(chunks, resChunk{
+			Index: chunk.Index,
 		})
 	}
 
-	var chunkIndexes []uint
-	for _, chunk := range file.Chunks {
-		chunkIndexes = append(chunkIndexes, chunk.Index)
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"chunks": chunkIndexes,
-	})
+	return c.Status(fiber.StatusOK).JSON(chunks)
 }
 
 func GetFileInfo(c *fiber.Ctx) error {
 	//get file from local context
 	file, ok := c.Locals("file").(models.File)
 	if !ok {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to parse file",
-		})
-	}
-
-	//preload pieces
-	if err := initializers.DB.Preload("Chunks").Find(&file).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to load user files",
-		})
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
 	}
 
 	responseFile := struct {
-		id   uint
-		name string
-		size uint64
-		hash string
+		Id   uint   `json:"id"`
+		Name string `json:"name"`
+		Size uint64 `json:"size"`
+		Hash string `json:"hash"`
 	}{
-		id:   file.ID,
-		name: file.Name,
-		size: file.Size,
-		hash: file.Hash,
+		Id:   file.ID,
+		Name: file.Name,
+		Size: file.Size,
+		Hash: file.Hash,
 	}
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"file": responseFile,
-	})
+	return c.Status(fiber.StatusOK).JSON(responseFile)
+}
+
+func ChangeFilePrivacy(c *fiber.Ctx) error {
+	//get file from local context
+	file, ok := c.Locals("file").(models.File)
+	if !ok {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
+	}
+
+	var body struct {
+		IsPublic bool
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "Failed to parse body")
+	}
+
+	file.IsPublic = body.IsPublic
+	if err := initializers.DB.Save(&file).Error; err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to patch file")
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{})
+}
+
+func DeleteFile(c *fiber.Ctx) error {
+	//get file from local context
+	file, ok := c.Locals("file").(models.File)
+	if !ok {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
+	}
+
+	if err := initializers.DB.Delete(&file).Error; err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "Failed to delete file")
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{})
 }

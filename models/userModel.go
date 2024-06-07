@@ -21,6 +21,11 @@ func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
+func (u *User) AfterDelete(tx *gorm.DB) (err error) {
+	tx.Where("user_id = ?", u.ID).Delete(&File{})
+	return
+}
+
 type File struct {
 	gorm.Model
 	UserId    uint    `gorm:"not null"`
@@ -47,6 +52,11 @@ func (f *File) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
+func (f *File) AfterDelete(tx *gorm.DB) (err error) {
+	tx.Where("file_id = ?", f.ID).Delete(&Chunk{})
+	return
+}
+
 type Chunk struct {
 	gorm.Model
 	FileId    uint   `gorm:"not null"`
@@ -57,15 +67,19 @@ type Chunk struct {
 	File      File   `gorm:"references:ID"`
 }
 
-func (p *Chunk) BeforeCreate(tx *gorm.DB) (err error) {
-	if p.FileId == 0 {
+func (c *Chunk) BeforeCreate(tx *gorm.DB) (err error) {
+	if c.FileId == 0 {
 		err = errors.New("file id cannot be zero")
-	} else if p.MessageId == "" {
+	} else if c.MessageId == "" {
 		err = errors.New("message id cannot be empty")
-	} else if p.Hash == "" {
+	} else if c.Hash == "" {
 		err = errors.New("file hash cannot be empty")
-	} else if p.Size == 0 {
+	} else if c.Size == 0 {
 		err = errors.New("file size cannot be zero")
 	}
+	return
+}
+
+func (c *Chunk) AfterDelete(tx *gorm.DB) (err error) {
 	return
 }
