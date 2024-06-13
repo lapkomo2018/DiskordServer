@@ -13,6 +13,7 @@
 /Godeps/
 
 .env
+Dockerfile
 
 *.log
 
