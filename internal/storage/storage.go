@@ -11,8 +11,8 @@ type Deps struct {
 }
 
 type Storage struct {
-	Discord *discord.Storage
 	Gorm    *gorm.Storage
+	Discord *discord.Storage
 }
 
 func New(deps Deps) (*Storage, error) {

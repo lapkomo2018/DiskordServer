@@ -15,9 +15,8 @@ func NewFileStorage(db *gorm.DB) *FileStorage {
 	}
 }
 
-// TODO: FIX ERROR
 func (us *FileStorage) First(file *core.File, cond ...interface{}) error {
-	return us.db.First(file, cond...).Error
+	return us.db.Where(file).First(file, cond...).Error
 }
 
 func (us *FileStorage) FindAll(dest interface{}, conds ...interface{}) error {

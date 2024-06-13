@@ -41,12 +41,11 @@ func (d *FileStorage) DownloadFileFromMessage(messageId string) (io.Reader, erro
 		}
 
 		var buffer bytes.Buffer
-
-		if _, err := io.Copy(&buffer, response.Body); err != nil {
-			response.Body.Close()
+		_, err = io.Copy(&buffer, response.Body)
+		response.Body.Close()
+		if err != nil {
 			return nil, err
 		}
-		response.Body.Close()
 
 		bufferReader := bytes.NewReader(buffer.Bytes())
 

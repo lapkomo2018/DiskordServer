@@ -1,41 +1,40 @@
-package handler
+package v1
 
 import (
+	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/skip"
 	"github.com/lapkomo2018/DiskordServer/internal/core"
 )
 
-type FileService interface {
-	Create(file *core.File) error
-	Save(file *core.File) error
-	Delete(file *core.File) error
-	IsNeedChunk(file *core.File, chunkSize uint64) (bool, error)
-	LoadChunks(file *core.File) error
-}
+func (h *Handler) initFilesRouters(api fiber.Router) {
+	files := api.Group("/files")
+	{
+		files.Post("/upload", h.userIdentify, h.fileUpload)
 
-type FileHandler struct {
-	service FileService
-}
+		file := files.Group(fmt.Sprintf("/:%s<min(1)>", FileIdParams), h.setFileFromRequest, skip.New(h.userIdentify, fileIsPublic), skip.New(fileOwnerCheck, fileIsPublic))
+		{
+			file.Get("/", fileInfo)
+			file.Get("/download", h.fileChunks)
+			file.Patch("/privacy", skip.New(h.userIdentify, isInLocals(UserLocals)), fileOwnerCheck, h.fileChangePrivacy)
+			file.Delete("/", skip.New(h.userIdentify, isInLocals(UserLocals)), fileOwnerCheck, h.fileDelete)
 
-func NewFileHandler(s FileService) *FileHandler {
-	return &FileHandler{
-		service: s,
+			h.initChunksRouters(file)
+		}
 	}
 }
 
-func (f *FileHandler) Download(c *fiber.Ctx) error {
-	//get file from local context
-	file, ok := c.Locals("file").(core.File)
+func (h *Handler) fileChunks(c *fiber.Ctx) error {
+	file, ok := c.Locals(FileLocals).(core.File)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
 	}
 
 	//preload pieces
-	if err := f.service.LoadChunks(&file); err != nil {
+	if err := h.fileService.LoadChunks(&file); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user files")
 	}
 
-	// validate file
 	if !file.Validate() {
 		return fiber.NewError(fiber.StatusInternalServerError, "File is corrupted")
 	}
@@ -53,9 +52,8 @@ func (f *FileHandler) Download(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(resChunks)
 }
 
-func (f *FileHandler) Info(c *fiber.Ctx) error {
-	//get file from local context
-	file, ok := c.Locals("file").(core.File)
+func fileInfo(c *fiber.Ctx) error {
+	file, ok := c.Locals(FileLocals).(core.File)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
 	}
@@ -74,9 +72,8 @@ func (f *FileHandler) Info(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(responseFile)
 }
 
-func (f *FileHandler) ChangePrivacy(c *fiber.Ctx) error {
-	//get file from local context
-	file, ok := c.Locals("file").(core.File)
+func (h *Handler) fileChangePrivacy(c *fiber.Ctx) error {
+	file, ok := c.Locals(FileLocals).(core.File)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
 	}
@@ -89,30 +86,28 @@ func (f *FileHandler) ChangePrivacy(c *fiber.Ctx) error {
 	}
 
 	file.IsPublic = body.IsPublic
-	if err := f.service.Save(&file); err != nil {
+	if err := h.fileService.Save(&file); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to patch file")
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{})
 }
 
-func (f *FileHandler) Delete(c *fiber.Ctx) error {
-	//get file from local context
-	file, ok := c.Locals("file").(core.File)
+func (h *Handler) fileDelete(c *fiber.Ctx) error {
+	file, ok := c.Locals(FileLocals).(core.File)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
 	}
 
-	if err := f.service.Delete(&file); err != nil {
+	if err := h.fileService.Delete(&file); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to delete file")
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{})
 }
 
-func (f *FileHandler) Upload(c *fiber.Ctx) error {
-	//get user from local context
-	user, ok := c.Locals("user").(core.User)
+func (h *Handler) fileUpload(c *fiber.Ctx) error {
+	user, ok := c.Locals(UserLocals).(core.User)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
 	}
@@ -141,13 +136,11 @@ func (f *FileHandler) Upload(c *fiber.Ctx) error {
 		ChunkSize: body.ChunkSize,
 	}
 
-	if err := f.service.Create(&file); err != nil {
+	if err := h.fileService.Create(&file); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to create file")
 	}
 
-	//response
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"fileId": file.ID,
 	})
-
 }

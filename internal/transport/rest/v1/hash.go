@@ -1,4 +1,4 @@
-package handler
+package v1
 
 import (
 	"github.com/gofiber/fiber/v2"
@@ -6,15 +6,12 @@ import (
 	"mime/multipart"
 )
 
-type HashHandler struct {
-}
-
-func NewHashHandler() *HashHandler {
-	return &HashHandler{}
-}
-
-type hashOutput struct {
-	Hash string `json:"hash"`
+func (h *Handler) initHashRouters(api fiber.Router) {
+	hashRouter := api.Group("/hash")
+	{
+		hashRouter.Post("/file", hashFile)
+		hashRouter.Post("/[]string", hashStringMassive)
+	}
 }
 
 // @Summary File
@@ -29,7 +26,11 @@ type hashOutput struct {
 // @Failure 500 {object} model.ErrorResponse
 // @Router /hash/file [post]
 
-func (h *HashHandler) File(c *fiber.Ctx) error {
+type hashOutput struct {
+	Hash string `json:"hash"`
+}
+
+func hashFile(c *fiber.Ctx) error {
 	var file *multipart.FileHeader
 	var err error
 	if file, err = c.FormFile("file"); err != nil {
@@ -64,7 +65,7 @@ type stringMassiveInput struct {
 	Hashes []string `json:"hashes"`
 }
 
-func (h *HashHandler) StringMassive(c *fiber.Ctx) error {
+func hashStringMassive(c *fiber.Ctx) error {
 	var body stringMassiveInput
 	if err := c.BodyParser(&body); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Failed to parse body")

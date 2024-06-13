@@ -1,6 +1,9 @@
 package discord
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"github.com/bwmarrin/discordgo"
+	"log"
+)
 
 type Deps struct {
 	BotToken string
@@ -12,6 +15,7 @@ type Storage struct {
 }
 
 func New(deps Deps) (*Storage, error) {
+	log.Println("Connecting to discord...")
 	bot, err := discordgo.New("Bot " + deps.BotToken)
 	if err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-package handler
+package rest
 
 import (
 	"errors"
@@ -6,14 +6,7 @@ import (
 	"github.com/lapkomo2018/DiskordServer/internal/core"
 )
 
-type ErrorHandler struct {
-}
-
-func NewErrorHandler() *ErrorHandler {
-	return &ErrorHandler{}
-}
-
-func (e *ErrorHandler) Handle(c *fiber.Ctx, err error) error {
+func ErrorHandler(c *fiber.Ctx, err error) error {
 	// Status code defaults to 500
 	code := fiber.StatusInternalServerError
 

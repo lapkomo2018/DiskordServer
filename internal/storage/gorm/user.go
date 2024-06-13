@@ -16,7 +16,7 @@ func NewUserStorage(db *gorm.DB) *UserStorage {
 }
 
 func (us *UserStorage) First(user *core.User, cond ...interface{}) error {
-	return us.db.First(user, cond...).Error
+	return us.db.Where(user).First(user, cond...).Error
 }
 
 func (us *UserStorage) FindAll(dest interface{}, conds ...interface{}) error {

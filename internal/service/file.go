@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/lapkomo2018/DiskordServer/internal/core"
+	"log"
 )
 
 type FileStorage interface {
@@ -18,6 +19,7 @@ type FileService struct {
 }
 
 func NewFileService(s FileStorage) *FileService {
+	log.Printf("Created file service")
 	return &FileService{storage: s}
 }
 

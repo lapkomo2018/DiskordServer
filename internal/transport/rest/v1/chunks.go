@@ -1,41 +1,35 @@
-package handler
+package v1
 
 import (
 	"errors"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/skip"
 	"github.com/lapkomo2018/DiskordServer/internal/core"
-	"io"
 	"mime/multipart"
 )
 
-type ChunkService interface {
-	DownloadChunk(chunk core.Chunk) (io.Reader, error)
-	UploadChunk(chunk *core.Chunk, file *multipart.FileHeader) error
-}
+func (h *Handler) initChunksRouters(api fiber.Router) {
+	chunks := api.Group("/chunks")
+	{
+		chunks.Post("/upload", skip.New(h.userIdentify, isInLocals(UserLocals)), fileOwnerCheck, h.chunkUpload)
 
-type ChunkHandler struct {
-	chunkService ChunkService
-	fileService  FileService
-}
-
-func NewChunkHandler(chunkService ChunkService, fileService FileService) *ChunkHandler {
-	return &ChunkHandler{
-		chunkService: chunkService,
-		fileService:  fileService,
+		chunk := chunks.Group(fmt.Sprintf("/:%s<min(0)>", ChunkIndexParams), h.setChunkFromRequest)
+		{
+			chunk.Get("/", chunkInfo)
+			chunk.Get("/download", h.chunkDownload)
+		}
 	}
 }
 
-func (c *ChunkHandler) Download(ctx *fiber.Ctx) error {
-	var err error
-	// get chunk from local
-	chunk, ok := ctx.Locals("chunk").(core.Chunk)
+func (h *Handler) chunkDownload(ctx *fiber.Ctx) error {
+	chunk, ok := ctx.Locals(ChunkLocals).(core.Chunk)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse chunk")
 	}
 
 	// open reader
-	var fileReader io.Reader
-	fileReader, err = c.chunkService.DownloadChunk(chunk)
+	fileReader, err := h.chunkService.DownloadChunk(&chunk)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to download chunk file")
 	}
@@ -43,17 +37,16 @@ func (c *ChunkHandler) Download(ctx *fiber.Ctx) error {
 	return ctx.Status(fiber.StatusOK).SendStream(fileReader)
 }
 
-func (c *ChunkHandler) Info(ctx *fiber.Ctx) error {
-	// get chunk from local
-	chunk, ok := ctx.Locals("chunk").(core.Chunk)
+func chunkInfo(ctx *fiber.Ctx) error {
+	chunk, ok := ctx.Locals(ChunkLocals).(core.Chunk)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse chunk")
 	}
 
 	responseChunk := struct {
-		ID   uint
-		Size uint64
-		Hash string
+		ID   uint   `json:"id"`
+		Size uint64 `json:"size"`
+		Hash string `json:"hash"`
 	}{
 		ID:   chunk.ID,
 		Size: chunk.Size,
@@ -62,9 +55,8 @@ func (c *ChunkHandler) Info(ctx *fiber.Ctx) error {
 	return ctx.Status(fiber.StatusOK).JSON(responseChunk)
 }
 
-func (c *ChunkHandler) Upload(ctx *fiber.Ctx) error {
-	// get file from local context
-	file, ok := ctx.Locals("file").(core.File)
+func (h *Handler) chunkUpload(ctx *fiber.Ctx) error {
+	file, ok := ctx.Locals(FileLocals).(core.File)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
 	}
@@ -79,7 +71,7 @@ func (c *ChunkHandler) Upload(ctx *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "Failed to parse body")
 	}
 
-	isNeed, err := c.fileService.IsNeedChunk(&file, body.Size)
+	isNeed, err := h.fileService.IsNeedChunk(&file, body.Size)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
@@ -104,11 +96,9 @@ func (c *ChunkHandler) Upload(ctx *fiber.Ctx) error {
 		Size:   body.Size,
 		Index:  uint(body.Index),
 	}
-
-	if err := c.chunkService.UploadChunk(&chunk, chunkFile); err != nil {
+	if err := h.chunkService.UploadChunk(&chunk, chunkFile); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
 
-	// response
 	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{})
 }

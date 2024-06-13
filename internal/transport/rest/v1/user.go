@@ -1,24 +1,23 @@
-package handler
+package v1
 
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/lapkomo2018/DiskordServer/internal/core"
+	"github.com/lapkomo2018/DiskordServer/pkg/validation"
 	"time"
 )
 
-type UserService interface {
-	Create(email, password string) (*core.User, error)
-	Login(email, password string) (token string, err error)
-	LoadFiles(user *core.User) error
-}
+func (h *Handler) initUserRouters(api fiber.Router) {
+	user := api.Group("/user")
+	{
+		user.Post("/signup", h.userSignup)
+		user.Post("/login", h.userLogin)
 
-type UserHandler struct {
-	userService UserService
-}
-
-func NewUserHandler(userService UserService) *UserHandler {
-	return &UserHandler{
-		userService: userService,
+		authorized := user.Group("", h.userIdentify)
+		{
+			authorized.Get("/validate", userValidate)
+			authorized.Get("/files", h.userFiles)
+		}
 	}
 }
 
@@ -38,18 +37,25 @@ type signupInput struct {
 	Password string
 }
 
-func (u *UserHandler) Signup(c *fiber.Ctx) error {
+func (h *Handler) userSignup(c *fiber.Ctx) error {
 	//get email/pass
 	var body signupInput
 	if c.BodyParser(&body) != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Failed to read body")
 	}
 
-	if _, err := u.userService.Create(body.Email, body.Password); err != nil {
+	if err := validation.ValidateEmail(body.Email); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	if err := validation.ValidatePassword(body.Password); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	if _, err := h.userService.Create(body.Email, body.Password); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
 
-	//respond
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{})
 }
 
@@ -70,38 +76,44 @@ type loginInput struct {
 	Password string
 }
 type loginOutput struct {
-	Authorization string
+	Token string `json:"token"`
 }
 
-func (u *UserHandler) Login(c *fiber.Ctx) error {
+func (h *Handler) userLogin(c *fiber.Ctx) error {
 	// get email/pass
 	var body loginInput
 	if c.BodyParser(&body) != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Failed to read body")
 	}
 
+	if err := validation.ValidateEmail(body.Email); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	if err := validation.ValidatePassword(body.Password); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
 	var token string
 	var err error
-	if token, err = u.userService.Login(body.Email, body.Password); err != nil {
+	if token, err = h.userService.Login(body.Email, body.Password); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
 
 	//setting authorization cookie
 	c.Cookie(&fiber.Cookie{
-		Name:     "Authorization",
+		Name:     AuthorizationCookie,
 		Value:    token,
 		Expires:  time.Now().Add(time.Hour * 24 * 30),
 		HTTPOnly: true,
 		SameSite: "Lax",
 	})
-	//respond
-	return c.Status(fiber.StatusOK).JSON(loginOutput{
-		Authorization: token,
-	})
+
+	return c.Status(fiber.StatusOK).JSON(loginOutput{token})
 }
 
-func (u *UserHandler) Validate(c *fiber.Ctx) error {
-	user, ok := c.Locals("user").(core.User)
+func userValidate(c *fiber.Ctx) error {
+	user, ok := c.Locals(UserLocals).(core.User)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
 	}
@@ -118,13 +130,13 @@ type outputFile struct {
 	IsPublic bool   `json:"isPublic"`
 }
 
-func (u *UserHandler) Files(c *fiber.Ctx) error {
-	user, ok := c.Locals("user").(core.User)
+func (h *Handler) userFiles(c *fiber.Ctx) error {
+	user, ok := c.Locals(UserLocals).(core.User)
 	if !ok {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
 	}
 
-	if err := u.userService.LoadFiles(&user); err != nil {
+	if err := h.userService.LoadFiles(&user); err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user files")
 	}
 

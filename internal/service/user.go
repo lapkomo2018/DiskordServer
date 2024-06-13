@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/lapkomo2018/DiskordServer/internal/core"
 	"golang.org/x/crypto/bcrypt"
-	"net/mail"
+	"log"
 	"strconv"
 	"time"
 )
@@ -29,6 +29,7 @@ type UserService struct {
 }
 
 func NewUserService(storage UserStorage, tokenManager TokenManager, accessTokenTTL time.Duration) *UserService {
+	log.Printf("Created user service")
 	return &UserService{
 		storage:        storage,
 		tokenManager:   tokenManager,
@@ -37,12 +38,10 @@ func NewUserService(storage UserStorage, tokenManager TokenManager, accessTokenT
 }
 
 func (us *UserService) Create(email, password string) (*core.User, error) {
-	//validate email
-	parsedEmail, err := mail.ParseAddress(email)
-	if err != nil {
-		return nil, err
+	// look up for user
+	if err := us.storage.Exists(email); err == nil {
+		return nil, errors.New("user already exists")
 	}
-	email = parsedEmail.Address
 
 	//hash pass
 	passHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -50,11 +49,6 @@ func (us *UserService) Create(email, password string) (*core.User, error) {
 		return nil, err
 	}
 	password = string(passHash)
-
-	// look up for user
-	if err := us.storage.Exists(email); err == nil {
-		return nil, errors.New("user already exists")
-	}
 
 	user := &core.User{
 		Email:    email,
@@ -91,13 +85,13 @@ func (us *UserService) LoadFiles(user *core.User) error {
 	return us.storage.LoadFiles(user)
 }
 
-func (us *UserService) Auth(token string) (*core.User, error) {
+func (us *UserService) GetUserFromToken(token string) (*core.User, error) {
 	userId, err := us.tokenManager.Parse(token)
 	if err != nil {
 		return nil, err
 	}
 
-	var user *core.User
+	user := &core.User{}
 	if err := us.storage.First(user, userId); err != nil {
 		return nil, err
 	}

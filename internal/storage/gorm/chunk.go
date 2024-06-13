@@ -16,7 +16,7 @@ func NewChunkStorage(db *gorm.DB) *ChunkStorage {
 }
 
 func (us *ChunkStorage) First(chunk *core.Chunk, cond ...interface{}) error {
-	return us.db.First(chunk, cond...).Error
+	return us.db.Where(chunk).First(chunk, cond...).Error
 }
 
 func (us *ChunkStorage) FindAll(dest interface{}, conds ...interface{}) error {

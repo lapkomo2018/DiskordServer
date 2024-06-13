@@ -5,10 +5,11 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"log"
 )
 
 type Deps struct {
-	DSN string
+	Dsn string
 }
 
 type Storage struct {
@@ -18,7 +19,8 @@ type Storage struct {
 }
 
 func New(deps Deps) (*Storage, error) {
-	db, err := gorm.Open(postgres.Open(deps.DSN), &gorm.Config{
+	log.Printf("Connecting db...")
+	db, err := gorm.Open(postgres.Open(deps.Dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {

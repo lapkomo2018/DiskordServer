@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
+	"log"
 	"math/rand"
 	"time"
 )
@@ -13,6 +14,7 @@ type Manager struct {
 }
 
 func NewManager(signingKey string) (*Manager, error) {
+	log.Printf("Creating JWTManager with signing key: %s", signingKey)
 	if signingKey == "" {
 		return nil, errors.New("signingKey is empty")
 	}
@@ -49,10 +51,6 @@ func (m *Manager) Parse(accessToken string) (string, error) {
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return "", fmt.Errorf("error get user claims from token")
-	}
-
-	if time.Now().Unix() > claims["exp"].(int64) {
-		return "", errors.New("token expired")
 	}
 
 	return claims["sub"].(string), nil

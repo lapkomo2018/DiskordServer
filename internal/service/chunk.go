@@ -6,6 +6,7 @@ import (
 	"github.com/lapkomo2018/DiskordServer/internal/core"
 	"github.com/lapkomo2018/DiskordServer/pkg/hash"
 	"io"
+	"log"
 	"mime/multipart"
 )
 
@@ -21,23 +22,25 @@ type DiscordFileStorage interface {
 }
 
 type ChunkService struct {
-	dbStorage   ChunkStorage
-	fileStorage DiscordFileStorage
+	chunkStorage ChunkStorage
+	fileStorage  DiscordFileStorage
 }
 
-func NewChunkService(s ChunkStorage) *ChunkService {
-	return &ChunkService{dbStorage: s}
+func NewChunkService(chunkStorage ChunkStorage, fileStorage DiscordFileStorage) *ChunkService {
+	log.Printf("Created chunk service")
+	return &ChunkService{chunkStorage: chunkStorage, fileStorage: fileStorage}
 }
 
 func (s *ChunkService) Exists(id uint) error {
-	return s.dbStorage.Exists(id)
+	return s.chunkStorage.Exists(id)
 }
 
 func (s *ChunkService) First(chunk *core.Chunk, cond ...interface{}) error {
-	return s.dbStorage.First(chunk, cond...)
+	return s.chunkStorage.First(chunk, cond...)
 }
 
-func (s *ChunkService) DownloadChunk(chunk core.Chunk) (io.Reader, error) {
+func (s *ChunkService) DownloadChunk(chunk *core.Chunk) (io.Reader, error) {
+
 	return s.fileStorage.DownloadFileFromMessage(chunk.MessageId)
 }
 
@@ -68,7 +71,7 @@ func (s *ChunkService) UploadChunk(chunk *core.Chunk, file *multipart.FileHeader
 
 	chunk.MessageId = messageId
 
-	if err := s.dbStorage.Create(chunk); err != nil {
+	if err := s.chunkStorage.Create(chunk); err != nil {
 		return err
 	}
 
