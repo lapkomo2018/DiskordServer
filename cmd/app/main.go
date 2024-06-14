@@ -66,7 +66,11 @@ func main() {
 	}
 
 	httpServer := rest.New(rest.Deps{
-		Services:      services,
+		ServicesV1: rest.ServicesV1{
+			UserService:  services.User,
+			FileService:  services.File,
+			ChunkService: services.Chunk,
+		},
 		BodyLimit:     1024 * 1024 * 25,
 		Port:          3000,
 		CorsWhiteList: corsWhiteList,
