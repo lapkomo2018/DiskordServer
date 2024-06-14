@@ -65,12 +65,16 @@ func main() {
 		corsWhiteList[i] = strings.TrimSpace(addr)
 	}
 
-	httpServer := rest.New(rest.Deps{
-		Services:      services,
+	server := rest.New(rest.Deps{
+		ServicesV1: rest.ServicesV1{
+			UserService:  services.User,
+			FileService:  services.File,
+			ChunkService: services.Chunk,
+		},
 		BodyLimit:     1024 * 1024 * 25,
 		Port:          3000,
 		CorsWhiteList: corsWhiteList,
 	}).Init()
 
-	log.Fatal(httpServer.Run())
+	log.Fatal(server.Run())
 }

@@ -30,23 +30,17 @@ type ChunkService interface {
 	UploadChunk(chunk *core.Chunk, file *multipart.FileHeader) error
 }
 
-type Deps struct {
-	UserService  UserService
-	FileService  FileService
-	ChunkService ChunkService
-}
-
 type Handler struct {
 	userService  UserService
 	fileService  FileService
 	chunkService ChunkService
 }
 
-func New(deps Deps) *Handler {
+func New(userService UserService, fileService FileService, chunkService ChunkService) *Handler {
 	return &Handler{
-		userService:  deps.UserService,
-		fileService:  deps.FileService,
-		chunkService: deps.ChunkService,
+		userService:  userService,
+		fileService:  fileService,
+		chunkService: chunkService,
 	}
 }
 
