@@ -11,7 +11,6 @@ import (
 	"github.com/lapkomo2018/DiskordServer/pkg/auth"
 	"log"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -61,10 +60,10 @@ func main() {
 		AccessTokenTTL:     time.Hour * 24 * 30,
 	})
 
-	corsWhiteList := strings.Split(os.Getenv("CORS_WHITELIST"), ",")
+	/*corsWhiteList := strings.Split(os.Getenv("CORS_WHITELIST"), ",")
 	for i, addr := range corsWhiteList {
 		corsWhiteList[i] = strings.TrimSpace(addr)
-	}
+	}*/
 
 	server := rest.New(rest.Deps{
 		ServicesV1: rest.ServicesV1{
@@ -73,9 +72,9 @@ func main() {
 			ChunkService: services.Chunk,
 			Validator:    validator.New(),
 		},
-		BodyLimit:     1024 * 1024 * 25,
-		Port:          3000,
-		CorsWhiteList: corsWhiteList,
+		BodyLimit: 1024 * 1024 * 25,
+		Port:      3000,
+		//CorsWhiteList: corsWhiteList,
 	}).Init()
 
 	log.Fatal(server.Run())

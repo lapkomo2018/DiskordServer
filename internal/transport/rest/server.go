@@ -41,7 +41,11 @@ func New(deps Deps) *Server {
 		CustomTimeFormat: "2006-01-02 15:04:05",
 	}))
 	e.Use(middleware.Recover())
-	e.Use(Cors(deps.CorsWhiteList))
+
+	//TODO: Fix Cors
+	//e.Use(Cors(deps.CorsWhiteList))
+	//While in fix use default
+	e.Use(middleware.CORS())
 
 	e.Pre(middleware.RemoveTrailingSlash())
 
