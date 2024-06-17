@@ -1,22 +1,24 @@
 package rest
 
 import (
-	"errors"
-	"github.com/gofiber/fiber/v2"
+	"github.com/labstack/echo/v4"
 	"github.com/lapkomo2018/DiskordServer/internal/core"
+	"net/http"
 )
 
-func ErrorHandler(c *fiber.Ctx, err error) error {
+func ErrorHandler(err error, c echo.Context) {
 	// Status code defaults to 500
-	code := fiber.StatusInternalServerError
+	code := http.StatusInternalServerError
+	message := err.Error()
 
-	// Retrieve the custom status code if it's a *fiber.Error
-	var fiberError *fiber.Error
-	if errors.As(err, &fiberError) {
-		code = fiberError.Code
+	// Check if it's an HTTP error
+	if he, ok := err.(*echo.HTTPError); ok {
+		code = he.Code
+		message = he.Message.(string)
 	}
 
-	return c.Status(code).JSON(core.ErrorResponse{
-		Error: err.Error(),
+	// Return JSON response with error message
+	_ = c.JSON(code, core.ErrorResponse{
+		Error: message,
 	})
 }

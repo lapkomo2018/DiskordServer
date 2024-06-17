@@ -1,22 +1,22 @@
 package v1
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/labstack/echo/v4"
 	"github.com/lapkomo2018/DiskordServer/internal/core"
-	"github.com/lapkomo2018/DiskordServer/pkg/validation"
+	"net/http"
 	"time"
 )
 
-func (h *Handler) initUserRouters(api fiber.Router) {
+func (h *Handler) initUserRouters(api *echo.Group) {
 	user := api.Group("/user")
 	{
-		user.Post("/signup", h.userSignup)
-		user.Post("/login", h.userLogin)
+		user.POST("/signup", h.userSignup)
+		user.POST("/login", h.userLogin)
 
 		authorized := user.Group("", h.userIdentify)
 		{
-			authorized.Get("/validate", userValidate)
-			authorized.Get("/files", h.userFiles)
+			authorized.GET("/validate", userValidate)
+			authorized.GET("/files", h.userFiles)
 		}
 	}
 }
@@ -33,30 +33,26 @@ func (h *Handler) initUserRouters(api fiber.Router) {
 // @Router /user/signup [post]
 
 type signupInput struct {
-	Email    string
-	Password string
+	Email    string `json:"email" form:"email" validate:"email" binding:"required"`
+	Password string `json:"password" form:"password" validate:"min=8" binding:"required"`
 }
 
-func (h *Handler) userSignup(c *fiber.Ctx) error {
+func (h *Handler) userSignup(c echo.Context) error {
 	//get email/pass
 	var body signupInput
-	if c.BodyParser(&body) != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "Failed to read body")
+	if c.Bind(&body) != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Failed to read body")
 	}
 
-	if err := validation.ValidateEmail(body.Email); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
-	}
-
-	if err := validation.ValidatePassword(body.Password); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	if err := h.validator.Struct(body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	if _, err := h.userService.Create(body.Email, body.Password); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{})
+	return c.JSON(http.StatusOK, echo.Map{})
 }
 
 // @Summary Login
@@ -71,78 +67,77 @@ func (h *Handler) userSignup(c *fiber.Ctx) error {
 // @Failure 500 {object} model.ErrorResponse
 // @Router /user/login [post]
 
-type loginInput struct {
-	Email    string
-	Password string
-}
-type loginOutput struct {
-	Token string `json:"token"`
-}
-
-func (h *Handler) userLogin(c *fiber.Ctx) error {
-	// get email/pass
-	var body loginInput
-	if c.BodyParser(&body) != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "Failed to read body")
+type (
+	loginInput struct {
+		Email    string `json:"email" form:"email" validate:"email" binding:"required"`
+		Password string `json:"password" form:"password" validate:"min=8" binding:"required"`
 	}
 
-	if err := validation.ValidateEmail(body.Email); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	loginOutput struct {
+		Token string `json:"token" form:"token"`
+	}
+)
+
+func (h *Handler) userLogin(c echo.Context) error {
+	var input loginInput
+	if c.Bind(&input) != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Failed to read input")
 	}
 
-	if err := validation.ValidatePassword(body.Password); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	if err := h.validator.Struct(input); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	var token string
 	var err error
-	if token, err = h.userService.Login(body.Email, body.Password); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	if token, err = h.userService.Login(input.Email, input.Password); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	//setting authorization cookie
-	c.Cookie(&fiber.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     AuthorizationCookie,
 		Value:    token,
-		Expires:  time.Now().Add(time.Hour * 24 * 30),
-		HTTPOnly: true,
-		SameSite: "Lax",
+		Expires:  time.Now().Add(CookieExpireTTL),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	})
 
-	return c.Status(fiber.StatusOK).JSON(loginOutput{token})
+	return c.JSON(http.StatusOK, loginOutput{token})
 }
 
-func userValidate(c *fiber.Ctx) error {
-	user, ok := c.Locals(UserLocals).(core.User)
+type userValidateOutput struct {
+	UserEmail string `json:"userEmail" form:"userEmail"`
+}
+
+func userValidate(c echo.Context) error {
+	user, ok := c.Get(UserLocals).(core.User)
 	if !ok {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse user")
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"userEmail": user.Email,
-	})
+	return c.JSON(http.StatusOK, userValidateOutput{UserEmail: user.Email})
 }
 
-type outputFile struct {
-	Id       uint   `json:"id"`
-	Name     string `json:"name"`
-	Size     uint64 `json:"size"`
-	IsPublic bool   `json:"isPublic"`
+type userFilesOutputFile struct {
+	Id       uint   `json:"id" form:"id"`
+	Name     string `json:"name" form:"name"`
+	Size     uint64 `json:"size" form:"size"`
+	IsPublic bool   `json:"isPublic" form:"isPublic"`
 }
 
-func (h *Handler) userFiles(c *fiber.Ctx) error {
-	user, ok := c.Locals(UserLocals).(core.User)
+func (h *Handler) userFiles(c echo.Context) error {
+	user, ok := c.Get(UserLocals).(core.User)
 	if !ok {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse user")
 	}
 
 	if err := h.userService.LoadFiles(&user); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user files")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load user files")
 	}
 
-	var files []outputFile
+	var files []userFilesOutputFile
 	for _, file := range user.Files {
-		files = append(files, outputFile{
+		files = append(files, userFilesOutputFile{
 			Id:       file.ID,
 			Name:     file.Name,
 			Size:     file.Size,
@@ -150,5 +145,5 @@ func (h *Handler) userFiles(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(files)
+	return c.JSON(http.StatusOK, files)
 }

@@ -1,27 +1,31 @@
 package rest
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/labstack/echo/v4"
+	"net/http"
 	"strings"
 )
 
-func Cors(allowedOrigins []string) func(*fiber.Ctx) error {
-	return func(c *fiber.Ctx) error {
-		c.Set("Access-Control-Allow-Credentials", "true")
-		c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
-		c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+func Cors(allowedOrigins []string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Response().Header().Set("Access-Control-Allow-Credentials", "true")
+			c.Response().Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+			c.Response().Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 
-		origin := c.Get("Origin")
-		for _, allowedOrigin := range allowedOrigins {
-			if strings.HasPrefix(origin, "http://"+allowedOrigin) || strings.HasPrefix(origin, "https://"+allowedOrigin) {
-				c.Set("Access-Control-Allow-Origin", origin)
-				break
+			origin := c.Request().Header.Get("Origin")
+			for _, allowedOrigin := range allowedOrigins {
+				if strings.HasPrefix(origin, "http://"+allowedOrigin) || strings.HasPrefix(origin, "https://"+allowedOrigin) {
+					c.Response().Header().Set("Access-Control-Allow-Origin", origin)
+					break
+				}
 			}
-		}
 
-		if c.Method() == "OPTIONS" {
-			return c.SendStatus(fiber.StatusNoContent)
+			if c.Request().Method == http.MethodOptions {
+				return c.NoContent(http.StatusNoContent)
+			}
+
+			return next(c)
 		}
-		return c.Next()
 	}
 }

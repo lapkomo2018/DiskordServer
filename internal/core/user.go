@@ -3,13 +3,17 @@ package core
 import (
 	"errors"
 	"gorm.io/gorm"
+	"time"
 )
 
 type User struct {
-	gorm.Model
-	Email    string `gorm:"unique;not null"`
-	Password string `gorm:"not null"`
-	Files    []File `gorm:"foreignKey:UserId"`
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+	Email     string         `gorm:"unique;not null"`
+	Password  string         `gorm:"not null"`
+	Files     []File         `gorm:"foreignKey:UserId"`
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) (err error) {

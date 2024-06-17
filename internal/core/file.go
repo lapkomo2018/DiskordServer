@@ -3,19 +3,23 @@ package core
 import (
 	"errors"
 	"gorm.io/gorm"
+	"time"
 )
 
 type File struct {
-	gorm.Model
-	UserId    uint    `gorm:"not null"`
-	Name      string  `gorm:"not null"`
-	Hash      string  `gorm:"not null"`
-	Size      uint64  `gorm:"not null"`
-	IsPublic  bool    `gorm:"not null"`
-	NumChunks uint    `gorm:"not null"`
-	ChunkSize uint64  `gorm:"not null"`
-	Chunks    []Chunk `gorm:"foreignKey:FileId"`
-	User      User    `gorm:"references:ID"`
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+	UserId    uint           `gorm:"not null"`
+	Name      string         `gorm:"not null"`
+	Hash      string         `gorm:"not null"`
+	Size      uint64         `gorm:"not null"`
+	IsPublic  bool           `gorm:"not null"`
+	NumChunks uint           `gorm:"not null"`
+	ChunkSize uint64         `gorm:"not null"`
+	Chunks    []Chunk        `gorm:"foreignKey:FileId"`
+	User      User           `gorm:"references:ID"`
 }
 
 func (f *File) BeforeCreate(tx *gorm.DB) (err error) {

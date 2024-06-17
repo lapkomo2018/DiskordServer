@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
 	"github.com/lapkomo2018/DiskordServer/internal/service"
 	"github.com/lapkomo2018/DiskordServer/internal/storage"
@@ -70,6 +71,7 @@ func main() {
 			UserService:  services.User,
 			FileService:  services.File,
 			ChunkService: services.Chunk,
+			Validator:    validator.New(),
 		},
 		BodyLimit:     1024 * 1024 * 25,
 		Port:          3000,

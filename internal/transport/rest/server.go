@@ -2,19 +2,18 @@ package rest
 
 import (
 	"fmt"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/swagger"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/lapkomo2018/DiskordServer/internal/transport/rest/v1"
 	"log"
-	"net/http"
+	"strconv"
 )
 
 type ServicesV1 struct {
-	UserService  v1.UserService
-	FileService  v1.FileService
-	ChunkService v1.ChunkService
+	v1.UserService
+	v1.ChunkService
+	v1.FileService
+	v1.Validator
 }
 
 type Deps struct {
@@ -25,31 +24,37 @@ type Deps struct {
 }
 
 type Server struct {
-	fiberApp   *fiber.App
+	echo       *echo.Echo
 	servicesV1 ServicesV1
 	addr       string
 }
 
 func New(deps Deps) *Server {
 	log.Printf("Created server with port: %d", deps.Port)
-	f := fiber.New(fiber.Config{
-		BodyLimit:    deps.BodyLimit,
-		ErrorHandler: ErrorHandler,
-	})
 
-	f.Use(logger.New())
-	f.Use(Cors(deps.CorsWhiteList))
+	e := echo.New()
+	e.HTTPErrorHandler = ErrorHandler
+
+	e.Use(middleware.BodyLimit(strconv.Itoa(deps.BodyLimit)))
+	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Format:           "${time_custom} | ${status} | ${latency_human} | ${remote_ip} | ${method} | ${uri} | ${error}\n",
+		CustomTimeFormat: "2006-01-02 15:04:05",
+	}))
+	e.Use(middleware.Recover())
+	e.Use(Cors(deps.CorsWhiteList))
+
+	e.Pre(middleware.RemoveTrailingSlash())
 
 	return &Server{
 		addr:       fmt.Sprintf(":%d", deps.Port),
-		fiberApp:   f,
+		echo:       e,
 		servicesV1: deps.ServicesV1,
 	}
 }
 
 func (s *Server) Init() *Server {
 	log.Println("Initializing server...")
-	s.fiberApp.Get("/swagger/*", swagger.HandlerDefault)
+	//s.fiberApp.Get("/swagger/*", swagger.HandlerDefault)
 
 	s.initApi()
 	return s
@@ -57,8 +62,8 @@ func (s *Server) Init() *Server {
 
 func (s *Server) initApi() {
 	log.Println("Initializing api...")
-	handlerV1 := v1.New(s.servicesV1.UserService, s.servicesV1.FileService, s.servicesV1.ChunkService)
-	api := s.fiberApp.Group("/api")
+	handlerV1 := v1.New(s.servicesV1.UserService, s.servicesV1.FileService, s.servicesV1.ChunkService, s.servicesV1.Validator)
+	api := s.echo.Group("/api")
 	{
 		handlerV1.Init(api)
 	}
@@ -66,16 +71,5 @@ func (s *Server) initApi() {
 
 func (s *Server) Run() error {
 	log.Println("Starting server")
-	return s.fiberApp.Listen(s.addr)
-}
-
-func (s *Server) HttpServer() *http.Server {
-	return &http.Server{
-		Addr:    s.addr,
-		Handler: s.HttpHandler(),
-	}
-}
-
-func (s *Server) HttpHandler() http.Handler {
-	return adaptor.FiberApp(s.fiberApp)
+	return s.echo.Start(s.addr)
 }

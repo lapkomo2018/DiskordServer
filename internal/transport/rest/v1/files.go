@@ -2,145 +2,170 @@ package v1
 
 import (
 	"fmt"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/skip"
+	"github.com/labstack/echo/v4"
 	"github.com/lapkomo2018/DiskordServer/internal/core"
+	"net/http"
 )
 
-func (h *Handler) initFilesRouters(api fiber.Router) {
+func (h *Handler) initFilesRouters(api *echo.Group) {
 	files := api.Group("/files")
 	{
-		files.Post("/upload", h.userIdentify, h.fileUpload)
+		files.POST("/upload", h.fileUpload, h.userIdentify)
 
-		file := files.Group(fmt.Sprintf("/:%s<min(1)>", FileIdParams), h.setFileFromRequest, skip.New(h.userIdentify, fileIsPublic), skip.New(fileOwnerCheck, fileIsPublic))
+		file := files.Group(fmt.Sprintf("/:%s", FileIdParams), h.fileIdentify)
 		{
-			file.Get("/", fileInfo)
-			file.Get("/download", h.fileChunks)
-			file.Patch("/privacy", skip.New(h.userIdentify, isInLocals(UserLocals)), fileOwnerCheck, h.fileChangePrivacy)
-			file.Delete("/", skip.New(h.userIdentify, isInLocals(UserLocals)), fileOwnerCheck, h.fileDelete)
+			filePublic := file.Group("", h.fileAccessCheck(true))
+			{
+				filePublic.GET("", fileInfo)
+				filePublic.GET("/download", h.fileChunks)
+			}
 
-			h.initChunksRouters(file)
+			filePrivate := file.Group("", h.fileAccessCheck(false))
+			{
+				filePrivate.DELETE("", h.fileDelete)
+				filePrivate.PATCH("/privacy", h.fileChangePrivacy)
+			}
+
+			h.initChunksRouters(filePublic, filePrivate)
 		}
 	}
 }
 
-func (h *Handler) fileChunks(c *fiber.Ctx) error {
-	file, ok := c.Locals(FileLocals).(core.File)
+type (
+	fileChunksOutputChunk struct {
+		Index uint `json:"index" form:"index" query:"index"`
+	}
+)
+
+func (h *Handler) fileChunks(c echo.Context) error {
+	file, ok := c.Get(FileLocals).(core.File)
 	if !ok {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse file")
 	}
 
-	//preload pieces
 	if err := h.fileService.LoadChunks(&file); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to load user files")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to load user files")
 	}
 
 	if !file.Validate() {
-		return fiber.NewError(fiber.StatusInternalServerError, "File is corrupted")
+		return echo.NewHTTPError(http.StatusInternalServerError, "File is corrupted")
 	}
 
-	type resChunk struct {
-		Index uint `json:"index"`
-	}
-	var resChunks []resChunk
+	var resChunks []fileChunksOutputChunk
 	for _, chunk := range file.Chunks {
-		resChunks = append(resChunks, resChunk{
+		resChunks = append(resChunks, fileChunksOutputChunk{
 			Index: chunk.Index,
 		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(resChunks)
+	return c.JSON(http.StatusOK, resChunks)
 }
 
-func fileInfo(c *fiber.Ctx) error {
-	file, ok := c.Locals(FileLocals).(core.File)
-	if !ok {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
-	}
-
-	responseFile := struct {
-		Id   uint   `json:"id"`
-		Name string `json:"name"`
-		Size uint64 `json:"size"`
-		Hash string `json:"hash"`
-	}{
-		Id:   file.ID,
-		Name: file.Name,
-		Size: file.Size,
-		Hash: file.Hash,
-	}
-	return c.Status(fiber.StatusOK).JSON(responseFile)
+type fileInfoOutput struct {
+	Id       uint   `json:"id" form:"id" query:"id"`
+	Name     string `json:"name" form:"name" query:"name"`
+	Size     uint64 `json:"size" form:"size" query:"size"`
+	Hash     string `json:"hash" form:"hash" query:"hash"`
+	IsPublic bool   `json:"isPublic" form:"isPublic" query:"isPublic"`
 }
 
-func (h *Handler) fileChangePrivacy(c *fiber.Ctx) error {
-	file, ok := c.Locals(FileLocals).(core.File)
+func fileInfo(c echo.Context) error {
+	file, ok := c.Get(FileLocals).(core.File)
 	if !ok {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse file")
 	}
 
-	var body struct {
-		IsPublic bool
+	responseFile := fileInfoOutput{
+		Id:       file.ID,
+		Name:     file.Name,
+		Size:     file.Size,
+		Hash:     file.Hash,
+		IsPublic: file.IsPublic,
 	}
-	if err := c.BodyParser(&body); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "Failed to parse body")
+	return c.JSON(http.StatusOK, responseFile)
+}
+
+type (
+	fileChangePrivacyInput struct {
+		IsPublic bool `json:"isPublic" form:"isPublic" query:"isPublic" binding:"required"`
+	}
+)
+
+func (h *Handler) fileChangePrivacy(c echo.Context) error {
+	file, ok := c.Get(FileLocals).(core.File)
+	if !ok {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse file")
 	}
 
-	file.IsPublic = body.IsPublic
+	var input fileChangePrivacyInput
+	if err := c.Bind(&input); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Failed to parse body")
+	}
+
+	file.IsPublic = input.IsPublic
 	if err := h.fileService.Save(&file); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to patch file")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to patch file")
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{})
+	return c.JSON(http.StatusOK, echo.Map{})
 }
 
-func (h *Handler) fileDelete(c *fiber.Ctx) error {
-	file, ok := c.Locals(FileLocals).(core.File)
+func (h *Handler) fileDelete(c echo.Context) error {
+	file, ok := c.Get(FileLocals).(core.File)
 	if !ok {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse file")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse file")
 	}
 
 	if err := h.fileService.Delete(&file); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to delete file")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to delete file")
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{})
+	return c.JSON(http.StatusOK, echo.Map{})
 }
 
-func (h *Handler) fileUpload(c *fiber.Ctx) error {
-	user, ok := c.Locals(UserLocals).(core.User)
+type (
+	fileUploadInput struct {
+		Name      string `json:"name" form:"name" query:"name" binding:"required"`
+		Size      uint64 `json:"size" form:"size" query:"size" binding:"required"`
+		Hash      string `json:"hash" form:"hash" query:"hash" binding:"required"`
+		IsPublic  bool   `json:"isPublic" form:"isPublic" query:"isPublic" binding:"required"`
+		NumChunks uint   `json:"numChunks" form:"numChunks" query:"numChunks" binding:"required"`
+		ChunkSize uint64 `json:"chunkSize" form:"chunkSize" query:"chunkSize" binding:"required"`
+	}
+	fileUploadOutput struct {
+		FileId uint `json:"fileId" form:"fileId" query:"fileId"`
+	}
+)
+
+func (h *Handler) fileUpload(c echo.Context) error {
+	user, ok := c.Get(UserLocals).(core.User)
 	if !ok {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse user")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse user")
 	}
 
 	//get file info from body
-	var body struct {
-		Name      string
-		Size      uint64
-		Hash      string
-		IsPublic  bool
-		NumChunks uint
-		ChunkSize uint64
-	}
-	if err := c.BodyParser(&body); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "Failed to parse body")
+	var input fileUploadInput
+	if err := c.Bind(&input); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Failed to parse body")
 	}
 
 	//add file to bd
 	file := core.File{
 		UserId:    user.ID,
-		Name:      body.Name,
-		Hash:      body.Hash,
-		Size:      body.Size,
-		IsPublic:  body.IsPublic,
-		NumChunks: body.NumChunks,
-		ChunkSize: body.ChunkSize,
+		Name:      input.Name,
+		Hash:      input.Hash,
+		Size:      input.Size,
+		IsPublic:  input.IsPublic,
+		NumChunks: input.NumChunks,
+		ChunkSize: input.ChunkSize,
 	}
-
 	if err := h.fileService.Create(&file); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to create file")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create file")
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"fileId": file.ID,
-	})
+	output := fileUploadOutput{
+		FileId: file.ID,
+	}
+
+	return c.JSON(http.StatusOK, output)
 }
