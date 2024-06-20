@@ -40,7 +40,6 @@ func New(deps Deps) *Server {
 		Format:           "${time_custom} | ${status} | ${latency_human} | ${remote_ip} | ${method} | ${uri} | ${error}\n",
 		CustomTimeFormat: "2006-01-02 15:04:05",
 	}))
-	e.Use(middleware.Recover())
 
 	//TODO: Fix Cors
 	//e.Use(Cors(deps.CorsWhiteList))

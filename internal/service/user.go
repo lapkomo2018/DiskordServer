@@ -48,11 +48,10 @@ func (us *UserService) Create(email, password string) (*core.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	password = string(passHash)
 
 	user := &core.User{
 		Email:    email,
-		Password: password,
+		Password: string(passHash),
 	}
 
 	if err := us.storage.Create(user); err != nil {

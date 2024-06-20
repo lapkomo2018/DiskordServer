@@ -24,7 +24,7 @@ func (us *FileStorage) FindAll(dest interface{}, conds ...interface{}) error {
 }
 
 func (us *FileStorage) Exists(id uint) error {
-	return us.db.First(core.File{}, id).Error
+	return us.db.First(&core.File{}, id).Error
 }
 
 func (us *FileStorage) Create(file *core.File) error {

@@ -24,7 +24,7 @@ func (us *ChunkStorage) FindAll(dest interface{}, conds ...interface{}) error {
 }
 
 func (us *ChunkStorage) Exists(id uint) error {
-	return us.db.First(core.Chunk{}, id).Error
+	return us.db.First(&core.Chunk{}, id).Error
 }
 
 func (us *ChunkStorage) Create(chunk *core.Chunk) error {

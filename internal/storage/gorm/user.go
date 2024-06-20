@@ -24,7 +24,10 @@ func (us *UserStorage) FindAll(dest interface{}, conds ...interface{}) error {
 }
 
 func (us *UserStorage) Exists(email string) error {
-	return us.db.First(core.User{Email: email}).Error
+	user := &core.User{
+		Email: email,
+	}
+	return us.db.Where(user).First(user).Error
 }
 
 func (us *UserStorage) Create(user *core.User) error {
