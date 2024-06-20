@@ -53,7 +53,11 @@ func (m *Manager) Parse(accessToken string) (string, error) {
 		return "", fmt.Errorf("error get user claims from token")
 	}
 
-	return claims["sub"].(string), nil
+	if val, ok := claims["sub"].(string); ok {
+		return val, nil
+	} else {
+		return "", fmt.Errorf("error get user sub from token")
+	}
 }
 
 func (m *Manager) NewRefreshToken() (string, error) {

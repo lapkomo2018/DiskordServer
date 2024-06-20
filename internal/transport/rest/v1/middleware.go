@@ -104,6 +104,7 @@ func (h *Handler) setFileFromRequest(c echo.Context) error {
 	}
 
 	c.Set(FileLocals, *file)
+
 	return nil
 }
 

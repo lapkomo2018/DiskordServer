@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"errors"
 	"github.com/labstack/echo/v4"
 	"github.com/lapkomo2018/DiskordServer/internal/core"
 	"net/http"
@@ -9,12 +10,15 @@ import (
 func ErrorHandler(err error, c echo.Context) {
 	// Status code defaults to 500
 	code := http.StatusInternalServerError
-	message := err.Error()
+	message := http.StatusText(code)
 
 	// Check if it's an HTTP error
-	if he, ok := err.(*echo.HTTPError); ok {
+	var he *echo.HTTPError
+	if errors.As(err, &he) {
 		code = he.Code
-		message = he.Message.(string)
+		if msg, ok := he.Message.(string); ok {
+			message = msg
+		}
 	}
 
 	// Return JSON response with error message
